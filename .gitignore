@@ -1,0 +1,35 @@
+# Models (large binary files)
+models/*.bin
+models/*.pt
+models/*/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# TouchDesigner
+*.toe.dir/
+*.toe.bak
+*.toe.lck
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Temp audio files
+*.wav.tmp
+temp_audio/
+
+# Virtual environments
+venv/
+.venv/
+env/
