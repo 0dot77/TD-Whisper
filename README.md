@@ -249,3 +249,257 @@ TD-Whisper/
 ## 라이선스
 
 MIT License - [0dot77](https://github.com/0dot77)
+
+---
+
+# TD-Whisper (English)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
+[![TouchDesigner](https://img.shields.io/badge/TouchDesigner-2023+-orange.svg)](https://derivative.ca)
+[![faster-whisper](https://img.shields.io/badge/Engine-faster--whisper-green.svg)](https://github.com/SYSTRAN/faster-whisper)
+
+**Local Speech-to-Text (STT) Plugin for TouchDesigner**
+
+A speech recognition plugin that runs completely offline -- no API keys, no internet required.
+Uses [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (based on CTranslate2) to deliver up to 4x faster performance compared to OpenAI Whisper.
+
+---
+
+## What is Local STT?
+
+Typical STT services (Google, OpenAI API, etc.) send audio to cloud servers for processing.
+
+**Local STT** is different:
+- All processing happens **on your machine**
+- **No API key needed** -- free and unlimited usage
+- **No internet needed** -- works in offline environments
+- **Privacy-friendly** -- voice data never leaves your computer
+- Ideal for installations, performances, and security-sensitive environments
+
+---
+
+## Installation
+
+### 1. Prepare a Python Environment
+
+A separate Python environment outside of TouchDesigner is required.
+
+```bash
+# Create a Python 3.10+ virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Install faster-whisper
+pip install faster-whisper
+
+# For model downloads
+pip install huggingface_hub
+```
+
+**For GPU usage (recommended):**
+```bash
+# CUDA-enabled PyTorch must be installed
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+pip install faster-whisper
+```
+
+### 2. Download Models
+
+```bash
+# List available models
+python scripts/download_model.py --list
+
+# Download the base model (recommended starting point)
+python scripts/download_model.py --model base
+
+# For better Korean accuracy, use small or larger
+python scripts/download_model.py --model small
+```
+
+### 3. TouchDesigner Setup
+
+1. **Create a Base COMP** -- Add a Base COMP to your project
+2. **Attach the Extension** -- Add `td/TDWhisper_Extension.py` as an Extension to the Base COMP
+3. **Add Custom Parameters** (on the Base COMP):
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `Modelsize` | Menu | `tiny`, `base`, `small`, `medium`, `large-v3` |
+| `Language` | Str | Language code (`ko`, `en`, `ja`, etc.). Leave empty for auto-detection |
+| `Pythonexe` | File | Path to the Python executable (e.g., `venv/bin/python`) |
+| `Modeldir` | Folder | Path to the model directory (optional) |
+| `Text` | Str | Latest transcription result (read-only) |
+| `Status` | Str | Current status (read-only) |
+| `Listening` | Toggle | Whether continuous listening mode is active (read-only) |
+
+4. **Create an Audio Device In CHOP** -- Add one for microphone input
+
+---
+
+## Usage
+
+### Single File Transcription
+
+```python
+# Transcribe a WAV file
+op('TDWhisper').ext.TDWhisperExt.Transcribe('/path/to/audio.wav')
+
+# Get the result
+text = op('TDWhisper').ext.TDWhisperExt.GetText()
+```
+
+### CHOP Audio Transcription
+
+```python
+# Record 5 seconds from Audio Device In CHOP, then transcribe
+ext = op('TDWhisper').ext.TDWhisperExt
+ext.TranscribeFromCHOP(
+    op('audiodevin1'),
+    duration_seconds=5.0,
+    callback='TDWhisper_Callbacks'
+)
+```
+
+### Continuous Listening Mode
+
+```python
+ext = op('TDWhisper').ext.TDWhisperExt
+
+# Start continuous recognition at 3-second intervals
+ext.StartListening(
+    op('audiodevin1'),
+    interval_seconds=3.0,
+    callback='TDWhisper_Callbacks'
+)
+
+# Stop
+ext.StopListening()
+```
+
+Continuous listening mode keeps the model loaded in memory, making it significantly faster than single transcriptions that reload the model each time.
+
+### Using Callbacks
+
+Place `td/TDWhisper_Callbacks.py` in a Text DAT and customize it:
+
+```python
+def onTranscriptionComplete(comp, result):
+    text = result.get("text", "")
+
+    # Output to a Text TOP
+    op('text1').par.text = text
+
+    # Pass as input to an LLM
+    op('llm_input').par.Prompt = text
+
+    # Send to other software via OSC
+    op('oscout1').sendOSC('/whisper/text', text)
+```
+
+---
+
+## Transcription Output Use Cases
+
+| Use Case | Method |
+|----------|--------|
+| Text visualization | Output results to a Text TOP |
+| LLM integration | Pass as input to GPT/Claude API |
+| OSC transmission | Send text to other software |
+| Voice commands | Trigger events by detecting specific keywords |
+| Subtitles | Real-time subtitles using segment timestamps |
+| Data logging | Record audience speech during exhibitions (with consent) |
+
+---
+
+## Model Comparison
+
+| Model | Size | VRAM | Speed (vs. real-time) | Korean Accuracy | Recommended Use |
+|-------|------|------|-----------------------|-----------------|-----------------|
+| `tiny` | 75 MB | ~400 MB | ~32x | Low | Quick prototyping, keyword detection |
+| `base` | 145 MB | ~500 MB | ~16x | Moderate | General real-time usage |
+| `small` | 488 MB | ~1 GB | ~6x | Good | Korean/multilingual recognition |
+| `medium` | 1.5 GB | ~2.6 GB | ~2x | Very good | When high accuracy is needed |
+| `large-v3` | 3.1 GB | ~5 GB | ~1x | Best | When highest quality is needed |
+
+> Speed figures are based on GPU (NVIDIA CUDA). On CPU, expect roughly 3-10x slower.
+
+### GPU vs CPU Performance
+
+- **NVIDIA GPU (CUDA)**: Recommended. Even `large-v3` runs at near real-time speed
+- **Apple Silicon (MPS)**: faster-whisper does not currently support MPS; falls back to CPU
+- **CPU only**: Recommended to limit usage to `tiny` or `base` models
+
+---
+
+## Use Cases
+
+- **Voice-controlled interactive installations**: Control visuals with audience voice input
+- **Real-time subtitle systems**: Display live subtitles for lectures and performances
+- **Voice to Text to AI Art**: Use spoken words as prompts for AI image generation
+- **Voice data visualization**: Visualize speech patterns, frequency, and emotion
+- **Multilingual exhibitions**: Automatic language detection and translation integration
+- **Accessibility tools**: Real-time captions for the hearing impaired
+
+---
+
+## Troubleshooting
+
+### "faster-whisper is not installed"
+```bash
+# Verify installation in the external Python environment
+pip show faster-whisper
+# Make sure the Pythonexe parameter points to the correct Python
+```
+
+### "Model not found"
+```bash
+# Download the model
+python scripts/download_model.py --model base
+# Make sure the Modeldir parameter points to the models/ folder
+```
+
+### Too slow on CPU
+- Use `tiny` or `base` models
+- Increase `interval_seconds` to 5 seconds or more
+- Use an NVIDIA GPU if possible
+
+### Inaccurate Korean recognition
+- Use `small` or larger models
+- Explicitly set the `Language` parameter to `ko` (more accurate than auto-detection)
+- Check microphone input quality (apply noise reduction filters)
+
+### TouchDesigner freezes
+- All transcriptions run asynchronously (threaded), so TD should not freeze
+- The `Pythonexe` path may be incorrect, causing the process to wait indefinitely
+- Test by running the worker directly in a terminal:
+  ```bash
+  python scripts/whisper_worker.py --model base --audio test.wav
+  ```
+
+### Microphone permissions on macOS
+- Go to System Settings > Privacy & Security > Microphone and allow TouchDesigner
+
+---
+
+## Project Structure
+
+```
+TD-Whisper/
+├── td/
+│   ├── TDWhisper_Extension.py    # Extension class
+│   └── TDWhisper_Callbacks.py    # Callback examples
+├── scripts/
+│   ├── whisper_worker.py          # Transcription worker process
+│   └── download_model.py         # Model downloader
+├── models/                        # Downloaded models (gitignored)
+├── README.md
+├── LICENSE
+└── .gitignore
+```
+
+---
+
+## License
+
+MIT License - [0dot77](https://github.com/0dot77)
